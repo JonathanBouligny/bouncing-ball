@@ -37,17 +37,6 @@ impl Grid {
         return (idx / self.width, idx % self.width);
     }
 
-    fn print_grid(&self) {
-        // for row in 0..self.get_height() {
-        //     for col in 0..self.width {}
-        // }
-
-        self.play_grid.iter().enumerate().for_each(|(idx, Cell)| {
-            let (row, col) = self.get_coords_grid(idx);
-            println!("Coords: {row},{col} Pos: {idx}",);
-        });
-    }
-
     fn get_height(&self) -> usize {
         return self.play_grid.len() / self.width;
     }
@@ -67,14 +56,6 @@ impl Grid {
     }
 
     fn initialize_ball(&mut self) {
-        // let mut rng = rand::rng();
-        // let mut row = 0;
-        // let mut col = 0;
-        // let mut idx = 0;
-        // while !self.is_inner_cell(row, col) {
-        //     idx = rng.random_range(..self.play_grid.len());
-        //     (row, col) = self.get_coords_grid(idx);
-        // }
         let flattened_pos = self.width + 1;
         self.set_ball_pos(flattened_pos);
     }
@@ -113,6 +94,5 @@ fn main() {
     };
     grid.initialize_walls();
     grid.initialize_ball();
-    grid.print_grid();
     grid.render();
 }
