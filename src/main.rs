@@ -9,19 +9,23 @@ struct Grid {
     width: usize,
     wall: char,
     ball: char,
-    ball_x: usize,
-    ball_y: usize,
+    ball_row: usize,
+    ball_col: usize,
 }
 
 impl Grid {
-    fn new(width: usize, height: usize, ball: char, wall: char) -> Self {
-        Self {
-            play_grid: vec![Cell::Empty; width * height],
-            width,
-            ball,
-            wall,
-            ball_x: 0,
-            ball_y: 0,
+    fn new(width: usize, height: usize, ball: char, wall: char) -> Result<Self, &'static str> {
+        if width > 2 && height > 2 {
+            return Ok(Self {
+                play_grid: vec![Cell::Empty; width * height],
+                width,
+                ball,
+                wall,
+                ball_row: 0,
+                ball_col: 0,
+            });
+        } else {
+            return Err("ERROR: Row and Col must each be larger then 2");
         }
     }
 
@@ -62,41 +66,53 @@ impl Grid {
         }
     }
 
-    fn initialize_ball(&mut self) {}
+    fn initialize_ball(&mut self) {
+        // let mut rng = rand::rng();
+        // let mut row = 0;
+        // let mut col = 0;
+        // let mut idx = 0;
+        // while !self.is_inner_cell(row, col) {
+        //     idx = rng.random_range(..self.play_grid.len());
+        //     (row, col) = self.get_coords_grid(idx);
+        // }
+        let flattened_pos = self.width + 1;
+        self.set_ball_pos(flattened_pos);
+    }
+
+    fn set_ball_pos(&mut self, flattened_pos: usize) {
+        self.play_grid[flattened_pos] = Cell::Ball;
+        (self.ball_row, self.ball_col) = self.get_coords_grid(flattened_pos);
+    }
 
     fn render(&self) {
         let mut render_string: String = String::from("");
-        // for row in 0..self.get_height() {
-        //     for col in 0..self.width {
-        //         let pos = self.get_position_flattened_grid(row, col);
-        //         match self.play_grid[pos] {
-        //             Cell::Ball => render_string.push_str(&self.ball.to_string()),
-        //             Cell::Wall => render_string.push_str(&self.wall.to_string()),
-        //             Cell::Empty => render_string.push_str(" "),
-        //         }
-        //     }
-        //     render_string.push_str("\n");
-        // }
-        let render_loop = |(idx, cell)| {
-            match self.play_grid[idx] {
-                Cell::Ball => render_string.push_str(&self.ball.to_string()),
-                Cell::Wall => render_string.push_str(&self.wall.to_string()),
-                Cell::Empty => render_string.push_str(" "),
+        let render_closure = |(idx, cell): (usize, &Cell)| {
+            match cell {
+                &Cell::Ball => render_string.push_str(&self.ball.to_string()),
+                &Cell::Wall => render_string.push_str(&self.wall.to_string()),
+                &Cell::Empty => render_string.push_str(" "),
             }
             if (idx + 1) % self.width == 0 {
                 render_string.push_str("\n");
             }
         };
-        self.play_grid.iter().enumerate().for_each(render_loop);
+        self.play_grid.iter().enumerate().for_each(render_closure);
         print!("{}", render_string);
     }
 }
 
 // = vec![Cell::Empty,Cell::Empty,Cell::Empty, Cell::Empty,Cell::Empty,Cell::Empty, Cell::Empty,Cell::Empty,Cell::Empty];
 fn main() {
-    let mut grid1 = Grid::new(10, 10, '●', '█');
-    grid1.initialize_walls();
-    grid1.initialize_ball();
-    grid1.print_grid();
-    grid1.render();
+    let grid = Grid::new(10, 10, '●', '█');
+    let mut grid = match grid {
+        Ok(val) => val,
+        Err(val) => {
+            println!("{val}");
+            return;
+        }
+    };
+    grid.initialize_walls();
+    grid.initialize_ball();
+    grid.print_grid();
+    grid.render();
 }
