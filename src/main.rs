@@ -1,8 +1,18 @@
+use std::thread::sleep;
+use std::time::Duration;
+
 #[derive(Clone)]
 enum Cell {
     Wall,
     Ball,
     Empty,
+}
+
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
 }
 struct Grid {
     play_grid: Vec<Cell>,
@@ -11,6 +21,9 @@ struct Grid {
     ball: char,
     ball_row: usize,
     ball_col: usize,
+    row_step: isize,
+    col_step: isize,
+    wait_time: u64,
 }
 
 impl Grid {
@@ -21,48 +34,72 @@ impl Grid {
                 width,
                 ball,
                 wall,
-                ball_row: 0,
-                ball_col: 0,
+                ball_row: 1,
+                ball_col: 1,
+                row_step: 1,
+                col_step: 1,
+                wait_time: 2,
             });
         } else {
             return Err("ERROR: Row and Col must each be larger then 2");
         }
     }
 
-    fn get_position_flattened_grid(&self, row: usize, col: usize) -> usize {
-        return row * self.width + col;
+    fn initialize(&mut self) {
+        for row in 0..self.get_height() as isize {
+            for col in 0..self.width as isize {
+                if !self.is_inner_cell(row, col) {
+                    self.set_play_grid(row, col, Cell::Wall);
+                }
+            }
+        }
+
+        self.set_play_grid(self.ball_row as isize, self.ball_col as isize, Cell::Ball);
     }
 
-    fn get_coords_grid(&self, idx: usize) -> (usize, usize) {
-        return (idx / self.width, idx % self.width);
+    fn get_position_flattened_grid(&self, row: isize, col: isize) -> isize {
+        return row * self.width as isize + col;
     }
+
+    // fn get_coords_grid(&self, idx: isize) -> (isize, isize) {
+    //     return (idx / self.width, idx % self.width);
+    // }
 
     fn get_height(&self) -> usize {
         return self.play_grid.len() / self.width;
     }
 
-    fn is_inner_cell(&self, row: usize, col: usize) -> bool {
-        return row > 0 && row < self.get_height() - 1 && col > 0 && col < self.width - 1;
+    fn set_play_grid(&mut self, row: isize, col: isize, cell_type: Cell) {
+        let flattened_pos = self.get_position_flattened_grid(row, col);
+        self.play_grid[flattened_pos as usize] = cell_type;
     }
-    fn initialize_walls(&mut self) {
-        for row in 0..self.get_height() {
-            for col in 0..self.width {
-                if !self.is_inner_cell(row, col) {
-                    let coord = self.get_position_flattened_grid(row, col);
-                    self.play_grid[coord] = Cell::Wall;
-                }
-            }
+
+    fn set_ball_pos(&mut self, row: isize, col: isize) {
+        self.set_play_grid(self.ball_row as isize, self.ball_col as isize, Cell::Empty);
+        self.set_play_grid(row, col, Cell::Ball);
+        self.ball_row = row as usize;
+        self.ball_col = col as usize;
+    }
+
+    fn is_inner_cell(&self, row: isize, col: isize) -> bool {
+        return row > 0
+            && row < self.get_height() as isize - 1
+            && col > 0
+            && col < self.width as isize - 1;
+    }
+
+    fn compute_next_pos(&self) -> (isize, isize) {
+        return (
+            self.ball_row as isize + self.row_step,
+            self.ball_col as isize + self.col_step,
+        );
+    }
+
+    fn move_ball(&mut self) {
+        let (next_row, next_col) = self.compute_next_pos();
+        if self.is_inner_cell(next_row, next_col) {
+            self.set_ball_pos(next_row, next_col);
         }
-    }
-
-    fn initialize_ball(&mut self) {
-        let flattened_pos = self.width + 1;
-        self.set_ball_pos(flattened_pos);
-    }
-
-    fn set_ball_pos(&mut self, flattened_pos: usize) {
-        self.play_grid[flattened_pos] = Cell::Ball;
-        (self.ball_row, self.ball_col) = self.get_coords_grid(flattened_pos);
     }
 
     fn render(&self) {
@@ -80,9 +117,20 @@ impl Grid {
         self.play_grid.iter().enumerate().for_each(render_closure);
         print!("{}", render_string);
     }
+
+    fn bounce(&mut self) {}
+
+    fn run(&mut self) {
+        while (true) {
+            print!("{esc}c", esc = 27 as char);
+            self.render();
+            sleep(Duration::from_secs(self.wait_time));
+            self.move_ball();
+            self.bounce();
+        }
+    }
 }
 
-// = vec![Cell::Empty,Cell::Empty,Cell::Empty, Cell::Empty,Cell::Empty,Cell::Empty, Cell::Empty,Cell::Empty,Cell::Empty];
 fn main() {
     let grid = Grid::new(10, 10, '●', '█');
     let mut grid = match grid {
@@ -92,7 +140,7 @@ fn main() {
             return;
         }
     };
-    grid.initialize_walls();
-    grid.initialize_ball();
-    grid.render();
+
+    grid.initialize();
+    grid.run();
 }
