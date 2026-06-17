@@ -23,6 +23,13 @@ struct Grid {
     terminated: bool,
 }
 
+struct Ball {
+    row: usize,
+    col: usize,
+    row_step: isize,
+    col_step: isize,
+}
+
 impl Grid {
     fn new(width: usize, height: usize, ball: char, wall: char) -> Result<Self, &'static str> {
         if width > 2 && height > 2 {
@@ -152,8 +159,8 @@ impl Grid {
     }
 
     fn clear_inner_cells(&mut self) {
-        for row in 1..self.get_height() as isize {
-            for col in 1..self.width as isize {
+        for row in 1..self.get_height() as isize - 1 {
+            for col in 1..self.width as isize - 1 {
                 self.set_play_grid(row, col, Cell::Empty);
             }
         }
