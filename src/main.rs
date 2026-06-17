@@ -20,7 +20,6 @@ struct Grid {
     col_step: isize,
     wait_time: u64,
     buf_writer: io::BufWriter<io::Stdout>,
-    previous_grid_state: Vec<Cell>,
     terminated: bool,
 }
 
@@ -29,7 +28,6 @@ impl Grid {
         if width > 2 && height > 2 {
             return Ok(Self {
                 play_grid: vec![Cell::Empty; width * height],
-                previous_grid_state: vec![Cell::Empty; width * height],
                 width,
                 ball,
                 wall,
@@ -55,7 +53,9 @@ impl Grid {
             }
         }
 
+        // stamp balls
         self.set_play_grid(self.ball_row as isize, self.ball_col as isize, Cell::Ball);
+        //
         // enable alternative screen buffer
         write!(self.buf_writer, "\x1b[?1049h")?;
         // hide cursor
@@ -151,12 +151,22 @@ impl Grid {
         Ok(())
     }
 
+    fn clear_inner_cells(&mut self) {
+        for row in 1..self.get_height() as isize {
+            for col in 1..self.width as isize {
+                self.set_play_grid(row, col, Cell::Empty);
+            }
+        }
+    }
+
     fn run(&mut self) -> io::Result<()> {
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(5) {
             self.render()?;
             sleep(Duration::from_millis(self.wait_time));
-            self.move_ball();
+            self.clear_inner_cells();
+            // balls calculate where they need to be
+            // stamp balls
         }
 
         Ok(())
