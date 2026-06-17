@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Clone)]
 enum Cell {
@@ -21,6 +21,7 @@ struct Grid {
     wait_time: u64,
     buf_writer: io::BufWriter<io::Stdout>,
     previous_grid_state: Vec<Cell>,
+    terminated: bool,
 }
 
 impl Grid {
@@ -34,10 +35,11 @@ impl Grid {
                 wall,
                 ball_row: 1,
                 ball_col: 1,
-                row_step: 2,
-                col_step: 2,
-                wait_time: 1,
+                row_step: 1,
+                col_step: 1,
+                wait_time: 33,
                 buf_writer: io::BufWriter::new(io::stdout()),
+                terminated: false,
             });
         } else {
             return Err("ERROR: Row and Col must each be larger then 2");
@@ -54,9 +56,24 @@ impl Grid {
         }
 
         self.set_play_grid(self.ball_row as isize, self.ball_col as isize, Cell::Ball);
+        // enable alternative screen buffer
+        write!(self.buf_writer, "\x1b[?1049h")?;
+        // hide cursor
         write!(self.buf_writer, "\x1b[?25l")?;
-        write!(self.buf_writer, "\x1b[2J")?;
 
+        Ok(())
+    }
+
+    fn terminate(&mut self) -> io::Result<()> {
+        // show cursor
+        write!(self.buf_writer, "\x1b[?25h")?;
+        // disable alternative screen buffer
+        write!(self.buf_writer, "\x1b[?1049l")?;
+
+        // BufferWriter flushes on its own drop on the way out so no flush is needed here
+        self.buf_writer.flush()?;
+
+        self.terminated = true;
         Ok(())
     }
 
@@ -103,6 +120,18 @@ impl Grid {
         }
     }
 
+    fn bounce(&mut self, row: isize, col: isize) {
+        if col <= 0 || col >= self.width as isize - 1 {
+            //flip from - to + movement direction on the x axis
+            self.col_step *= -1;
+        }
+
+        if row <= 0 || row >= self.get_height() as isize - 1 {
+            // flip from from - to + on the y axis
+            self.row_step *= -1;
+        }
+    }
+
     fn render(&mut self) -> io::Result<()> {
         write!(self.buf_writer, "\x1b[H")?;
 
@@ -122,41 +151,33 @@ impl Grid {
         Ok(())
     }
 
-    fn bounce(&mut self, row: isize, col: isize) {
-        if col <= 0 || col >= self.width as isize - 1 {
-            //flip from - to + movement direction on the x axis
-            self.col_step *= -1;
-        }
-
-        if row <= 0 || row >= self.get_height() as isize - 1 {
-            // flip from from - to + on the y axis
-            self.row_step *= -1;
-        }
-    }
-
-    fn run(&mut self) {
-        while (true) {
-            if let Err(e) = self.render() {
-                eprint!("{}", e);
-            }
-            sleep(Duration::from_secs(self.wait_time));
+    fn run(&mut self) -> io::Result<()> {
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(5) {
+            self.render()?;
+            sleep(Duration::from_millis(self.wait_time));
             self.move_ball();
+        }
+
+        Ok(())
+    }
+}
+
+impl Drop for Grid {
+    fn drop(&mut self) {
+        if !self.terminated
+            && let Err(e) = self.terminate()
+        {
+            println!("{e}");
         }
     }
 }
 
-fn main() {
-    let grid = Grid::new(20, 10, '●', '█');
-    let mut grid = match grid {
-        Ok(val) => val,
-        Err(val) => {
-            println!("{val}");
-            return;
-        }
-    };
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut grid = Grid::new(20, 10, '●', '█')?;
+    grid.initialize()?;
+    grid.run()?;
+    grid.terminate()?;
 
-    if let Err(e) = grid.initialize() {
-        println!("{e}");
-    }
-    grid.run();
+    Ok(())
 }
