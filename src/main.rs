@@ -1,14 +1,6 @@
-use core::num;
 use std::io::{self, Write};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-
-#[derive(Clone)]
-enum Cell {
-    Wall,
-    Ball,
-    Empty,
-}
 
 struct Ball {
     row: usize,
@@ -27,29 +19,28 @@ impl Ball {
         }
     }
 
-    fn compute_next_pos(&self) -> (isize, isize) {
-        return (
-            self.row as isize + self.row_step,
-            self.col as isize + self.col_step,
-        );
-    }
-
     fn move_ball(&mut self, width: usize, height: usize) {
-        let (next_row, next_col) = self.compute_next_pos();
+        let next_row = self.row as isize + self.row_step;
+        let next_col = self.col as isize + self.col_step;
+
+        // we have to use isize here because the comparison doesnt let us do usize to isize
         if next_row > 0
             && next_row < height as isize - 1
             && next_col > 0
             && next_col < width as isize - 1
         {
+            // if these values are inbounds its safe to convert this back to a usize
             self.row = next_row as usize;
             self.col = next_col as usize;
         } else {
             // Bounce
+            // If the next col is a wall or outside the bounds of the box
             if next_col <= 0 || next_col >= width as isize - 1 {
                 //flip from - to + movement direction on the x axis
                 self.col_step *= -1;
             }
 
+            // If the next row is a wall or outside the bounds of the box
             if next_row <= 0 || next_row >= height as isize - 1 {
                 // flip from from - to + on the y axis
                 self.row_step *= -1;
@@ -59,8 +50,8 @@ impl Ball {
 }
 
 struct Grid {
-    play_grid: Vec<Cell>,
     width: usize,
+    height: usize,
     wall: char,
     ball: char,
     wait_time: u64,
@@ -81,41 +72,36 @@ impl Grid {
     ) -> Result<Self, &'static str> {
         if width > 2 && height > 2 {
             let mut balls: Vec<Ball> = Vec::new();
+
+            // this loop is a little weird but it allows us to do an arbirtary number of balls. Maybe it can be made better
             let mut row = 1;
             let mut col = 1;
-            for n in 0..num_balls {
-                balls.push(Ball::new(row, col, 1, 1));
+            for idx in 0..num_balls {
+                balls.push(Ball::new(idx / width, idx % width, 1, 1));
                 row = row + 1 % height;
                 if row == height - 1 {
                     col = col + 1 % width;
                 }
             }
 
-            return Ok(Self {
-                play_grid: vec![Cell::Empty; width * height],
+            Ok(Self {
                 balls,
                 width,
+                height,
                 ball,
                 wall,
-                wait_time: 33,
                 buf_writer: io::BufWriter::new(io::stdout()),
                 terminated: false,
+                wait_time: 33,
                 run_time,
-            });
+            })
         } else {
-            return Err("ERROR: Row and Col must each be larger then 2");
+            Err("ERROR: Row and Col must each be larger then 2")
         }
     }
 
+    // Maybe this can be removed but mostly its here beause the buf_writer isnt ready in new
     fn initialize(&mut self) -> io::Result<()> {
-        for row in 0..self.get_height() as isize {
-            for col in 0..self.width as isize {
-                if !self.is_inner_cell(row, col) {
-                    self.set_play_grid(row, col, Cell::Wall);
-                }
-            }
-        }
-
         // enable alternative screen buffer
         write!(self.buf_writer, "\x1b[?1049h")?;
         // hide cursor
@@ -137,37 +123,17 @@ impl Grid {
         Ok(())
     }
 
-    fn get_position_flattened_grid(&self, row: isize, col: isize) -> isize {
-        return row * self.width as isize + col;
-    }
-
-    fn get_height(&self) -> usize {
-        return self.play_grid.len() / self.width;
-    }
-
-    fn set_play_grid(&mut self, row: isize, col: isize, cell_type: Cell) {
-        let flattened_pos = self.get_position_flattened_grid(row, col);
-        self.play_grid[flattened_pos as usize] = cell_type;
-    }
-
-    fn is_inner_cell(&self, row: isize, col: isize) -> bool {
-        return row > 0
-            && row < self.get_height() as isize - 1
-            && col > 0
-            && col < self.width as isize - 1;
-    }
-
     fn render(&mut self) -> io::Result<()> {
         write!(self.buf_writer, "\x1b[H")?;
 
-        for row in 0..self.get_height() {
+        for row in 0..self.height {
             for col in 0..self.width {
                 let ball_in_cell = self
                     .balls
                     .iter()
                     .any(|ball| ball.row == row && ball.col == col);
 
-                if !self.is_inner_cell(row as isize, col as isize) {
+                if !(row > 0 && row < self.height - 1 && col > 0 && col < self.width - 1) {
                     write!(self.buf_writer, "{}{}", self.wall, self.wall)?
                 } else if ball_in_cell {
                     write!(self.buf_writer, "{} ", self.ball)?
@@ -188,10 +154,8 @@ impl Grid {
         while start.elapsed() < Duration::from_secs(self.run_time) {
             self.render()?;
             sleep(Duration::from_millis(self.wait_time));
-            let width1 = self.width;
-            let height2 = self.get_height();
             self.balls.iter_mut().for_each(|ball| {
-                ball.move_ball(width1, height2);
+                ball.move_ball(self.width, self.height);
             });
         }
 
@@ -210,7 +174,7 @@ impl Drop for Grid {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut grid = Grid::new(20, 10, '●', '█', 4, 5)?;
+    let mut grid = Grid::new(25, 13, '●', '█', 4, 30)?;
     grid.initialize()?;
     grid.run()?;
     grid.terminate()?;
